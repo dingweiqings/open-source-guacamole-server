@@ -1,5 +1,4 @@
-#!/bin/sh -e
-#
+#!/bin/sh
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -33,7 +32,6 @@
 ##     in which the build should be performed. This is passed to the --prefix
 ##     option of `configure`.
 ##
-
 BUILD_DIR="$1"
 PREFIX_DIR="$2"
 
