@@ -23,10 +23,13 @@
 
 # The Ubuntu image that should be used as the basis for the guacd image
 ARG UBUNTU_BASE_IMAGE=21.10
-
 # Use Debian as base for the build
 FROM ubuntu:${UBUNTU_BASE_IMAGE} AS builder
 
+ARG USE_APT_REPOSITORY_MIRROR=true
+#More faster apt repo
+ARG APT_SOURCE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+ARG APT_SECURITY_SOURCE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
 #
 # The Debian repository that should be preferred for dependencies (this will be
 # added to /etc/apt/sources.list if not already present)
@@ -34,13 +37,16 @@ FROM ubuntu:${UBUNTU_BASE_IMAGE} AS builder
 # NOTE: Due to limitations of the Docker image build process, this value is
 # duplicated in an ARG in the second stage of the build.
 #
-ARG UBUNTU_RELEASE=impish-backports
+ARG UBUNTU_RELEASE=impish
 
 # Add repository for specified Ubuntu release if not already present in
 # sources.list
-RUN grep " ${UBUNTU_RELEASE} " /etc/apt/sources.list || echo >> /etc/apt/sources.list \
-    "deb http://archive.ubuntu.com/ubuntu/ ${UBUNTU_RELEASE} main contrib non-free"
-
+RUN ( $USE_APT_REPOSITORY_MIRROR  || test `grep " ${UBUNTU_RELEASE} " /etc/apt/sources.list | wc -l`  -eq 0) && ( cp /etc/apt/sources.list  /etc/apt/sources.list.bak && \
+    echo > /etc/apt/sources.list  \ 
+    "deb ${APT_SOURCE} ${UBUNTU_RELEASE} main restricted universe multiverse \n\
+    deb ${APT_SOURCE}  ${UBUNTU_RELEASE}-updates main restricted universe multiverse \n\
+    deb ${APT_SECURITY_SOURCE}  ${UBUNTU_RELEASE}-security main restricted universe multiverse \n\
+    deb ${APT_SOURCE}  ${UBUNTU_RELEASE}-backports main restricted universe multiverse " )
 #
 # Base directory for installed build artifacts.
 #
@@ -98,21 +104,18 @@ RUN ${PREFIX_DIR}/bin/list-dependencies.sh     \
 # Use same Debian as the base for the runtime image
 FROM ubuntu:${UBUNTU_BASE_IMAGE}
 
+ARG USE_APT_REPOSITORY_MIRROR=true
+# More faster apt repo
+ARG APT_SOURCE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+ARG APT_SECURITY_SOURCE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
 #
 # The Debian repository that should be preferred for dependencies (this will be
 # added to /etc/apt/sources.list if not already present)
 #
 # NOTE: Due to limitations of the Docker image build process, this value is
 # duplicated in an ARG in the first stage of the build.
-#
-ARG UBUNTU_RELEASE=impish-backports
+ARG UBUNTU_RELEASE=impish
 
-# Add repository for specified Ubuntu release if not already present in
-# sources.list
-RUN grep " ${UBUNTU_RELEASE} " /etc/apt/sources.list || echo >> /etc/apt/sources.list \
-    "deb http://archive.ubuntu.com/ubuntu/ ${UBUNTU_RELEASE} main contrib non-free"
-
-#
 # Base directory for installed build artifacts. See also the
 # CMD directive at the end of this build stage.
 #
@@ -120,6 +123,12 @@ RUN grep " ${UBUNTU_RELEASE} " /etc/apt/sources.list || echo >> /etc/apt/sources
 # duplicated in an ARG in the first stage of the build.
 #
 ARG PREFIX_DIR=/usr/local/guacamole
+RUN ( $USE_APT_REPOSITORY_MIRROR  ||  test `grep " ${UBUNTU_RELEASE} " /etc/apt/sources.list | wc -l`  -eq 0 ) && ( cp /etc/apt/sources.list  /etc/apt/sources.list.bak && \
+    echo > /etc/apt/sources.list  \ 
+    "deb ${APT_SOURCE} ${UBUNTU_RELEASE} main restricted universe multiverse \n\
+    deb ${APT_SOURCE}  ${UBUNTU_RELEASE}-updates main restricted universe multiverse \n\
+    deb ${APT_SECURITY_SOURCE}  ${UBUNTU_RELEASE}-security main restricted universe multiverse \n\
+    deb ${APT_SOURCE}  ${UBUNTU_RELEASE}-backports main restricted universe multiverse " )
 
 # Runtime environment
 ENV LC_ALL=C.UTF-8
@@ -145,6 +154,8 @@ RUN apt-get update                                                              
     apt-get install -t ${UBUNTU_RELEASE} -y --no-install-recommends $RUNTIME_DEPENDENCIES                && \
     apt-get install -t ${UBUNTU_RELEASE} -y --no-install-recommends $(cat "${PREFIX_DIR}"/DEPENDENCIES)  && \
     rm -rf /var/lib/apt/lists/*
+# Reset /etc/apt/sources.list file
+RUN test -f  /etc/apt/sources.list.bak && mv /etc/apt/sources.list.bak /etc/apt/sources.list
 
 # Link FreeRDP plugins into proper path
 RUN ${PREFIX_DIR}/bin/link-freerdp-plugins.sh \
